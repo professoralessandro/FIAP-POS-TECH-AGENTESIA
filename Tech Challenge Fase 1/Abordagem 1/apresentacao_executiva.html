@@ -1,0 +1,478 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Apresentação Executiva — IA Agêntica Olist</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg-dark: #0b0f19;
+      --card-bg: rgba(30, 41, 59, 0.7);
+      --border-color: rgba(255, 255, 255, 0.1);
+      --primary: #00d2ff;
+      --secondary: #3b82f6;
+      --accent: #10b981;
+      --danger: #ef4444;
+      --warning: #f59e0b;
+      --text-main: #f8fafc;
+      --text-muted: #94a3b8;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: 'Inter', sans-serif;
+      background-color: var(--bg-dark);
+      color: var(--text-main);
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+      overflow: hidden;
+    }
+
+    .presentation-container {
+      width: 90vw;
+      max-width: 1280px;
+      height: 80vh;
+      max-height: 720px;
+      position: relative;
+      background: radial-gradient(circle at top right, #1e293b, #0b0f19);
+      border-radius: 20px;
+      border: 1px solid var(--border-color);
+      box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+      overflow: hidden;
+    }
+
+    .slide {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      padding: 3rem 4rem;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      opacity: 0;
+      visibility: hidden;
+      transition: all 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+      transform: translateX(30px);
+    }
+
+    .slide.active {
+      opacity: 1;
+      visibility: visible;
+      transform: translateX(0);
+    }
+
+    /* Slide Header */
+    .slide-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-bottom: 1px solid var(--border-color);
+      padding-bottom: 1rem;
+    }
+
+    .slide-title {
+      font-size: 2.2rem;
+      font-weight: 800;
+      background: linear-gradient(135deg, #ffffff 0%, var(--primary) 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    .badge-tag {
+      background: rgba(0, 210, 255, 0.15);
+      color: var(--primary);
+      padding: 0.4rem 1rem;
+      border-radius: 50px;
+      font-size: 0.85rem;
+      font-weight: 600;
+      border: 1px solid rgba(0, 210, 255, 0.3);
+    }
+
+    /* Slide Body */
+    .slide-body {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      gap: 2rem;
+      margin: 1.5rem 0;
+    }
+
+    .grid-3 {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 1.5rem;
+      width: 100%;
+    }
+
+    .grid-2 {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 2rem;
+      width: 100%;
+    }
+
+    .card {
+      background: var(--card-bg);
+      border: 1px solid var(--border-color);
+      border-radius: 16px;
+      padding: 1.8rem;
+      backdrop-filter: blur(10px);
+      transition: transform 0.3s ease, border-color 0.3s ease;
+    }
+
+    .card:hover {
+      transform: translateY(-5px);
+      border-color: var(--primary);
+    }
+
+    .card h3 {
+      font-size: 1.25rem;
+      margin-bottom: 0.8rem;
+      color: var(--primary);
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    .card p {
+      color: var(--text-muted);
+      font-size: 0.95rem;
+      line-height: 1.5;
+    }
+
+    .card ul {
+      list-style-type: none;
+      margin-top: 0.8rem;
+    }
+
+    .card ul li {
+      color: var(--text-main);
+      font-size: 0.9rem;
+      margin-bottom: 0.5rem;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    .card ul li::before {
+      content: "•";
+      color: var(--primary);
+      font-size: 1.2rem;
+    }
+
+    /* Metric Cards */
+    .metric-box {
+      text-align: center;
+      padding: 1.5rem;
+    }
+
+    .metric-value {
+      font-size: 3rem;
+      font-weight: 800;
+      line-height: 1.1;
+      margin-bottom: 0.5rem;
+    }
+
+    .metric-danger { color: var(--danger); }
+    .metric-success { color: var(--accent); }
+    .metric-warning { color: var(--warning); }
+    .metric-primary { color: var(--primary); }
+
+    .metric-label {
+      font-size: 0.9rem;
+      color: var(--text-muted);
+      font-weight: 500;
+    }
+
+    /* Cover Slide Specifics */
+    .cover-slide {
+      text-align: center;
+      justify-content: center;
+      align-items: center;
+      background: radial-gradient(circle at center, rgba(0, 210, 255, 0.1) 0%, transparent 70%);
+    }
+
+    .cover-title {
+      font-size: 3.5rem;
+      font-weight: 800;
+      margin-bottom: 1rem;
+      line-height: 1.2;
+    }
+
+    .cover-subtitle {
+      font-size: 1.3rem;
+      color: var(--text-muted);
+      max-width: 800px;
+      margin-bottom: 2.5rem;
+    }
+
+    .presenter-info {
+      display: flex;
+      gap: 2rem;
+      font-size: 0.95rem;
+      color: var(--primary);
+      background: rgba(15, 23, 42, 0.8);
+      padding: 0.8rem 2rem;
+      border-radius: 50px;
+      border: 1px solid var(--border-color);
+    }
+
+    /* Slide Footer */
+    .slide-footer {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-top: 1px solid var(--border-color);
+      padding-top: 1rem;
+      font-size: 0.85rem;
+      color: var(--text-muted);
+    }
+
+    /* Controls */
+    .controls {
+      position: absolute;
+      bottom: 20px;
+      right: 30px;
+      display: flex;
+      gap: 0.5rem;
+      z-index: 100;
+    }
+
+    .btn {
+      background: rgba(30, 41, 59, 0.8);
+      border: 1px solid var(--border-color);
+      color: var(--text-main);
+      padding: 0.6rem 1.2rem;
+      border-radius: 8px;
+      cursor: pointer;
+      font-weight: 600;
+      transition: all 0.2s ease;
+    }
+
+    .btn:hover {
+      background: var(--primary);
+      color: #000;
+    }
+
+    .slide-counter {
+      position: absolute;
+      bottom: 25px;
+      left: 30px;
+      font-size: 0.9rem;
+      color: var(--text-muted);
+      font-weight: 600;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="presentation-container">
+    
+    <!-- SLIDE 1: COVER -->
+    <div class="slide active cover-slide">
+      <div class="badge-tag">Tech Challenge — Fase 1</div>
+      <h1 class="cover-title">Transformação em <span style="color: var(--primary);">IA Agêntica</span></h1>
+      <p class="cover-subtitle">Estratégia de Inteligência Artificial para Qualidade Logística, CX e Escala no Olist Intelligent Marketplace</p>
+      <div class="presenter-info">
+        <span>🏢 Consultoria de IA Agêntica</span>
+        <span>📅 Julho 2026</span>
+        <span>🎯 Caso Olist</span>
+      </div>
+    </div>
+
+    <!-- SLIDE 2: DIAGNÓSTICO DO NEGÓCIO -->
+    <div class="slide">
+      <div class="slide-header">
+        <h2 class="slide-title">1. Diagnóstico do Negócio — Dores & Dados</h2>
+        <span class="badge-tag">Fatos & Métricas</span>
+      </div>
+      <div class="slide-body">
+        <div class="grid-3">
+          <div class="card metric-box">
+            <div class="metric-value metric-danger">8,1%</div>
+            <div class="metric-label">Taxa de Atraso Logístico<br/>(Entregas fora do prazo)</div>
+          </div>
+          <div class="card metric-box">
+            <div class="metric-value metric-warning">-93 pts</div>
+            <div class="metric-label">Queda de NPS ao Atrasar<br/>(+73,6 no prazo vs -19,5 atrasado)</div>
+          </div>
+          <div class="card metric-box">
+            <div class="metric-value metric-success">33,7%</div>
+            <div class="metric-label">Receita em Clientes Hibernantes<br/>(Sem comprar há > 14 meses)</div>
+          </div>
+        </div>
+      </div>
+      <div class="slide-footer">
+        <span>Fonte: Dataset Público Olist (99k+ pedidos unificados)</span>
+        <span>Página 2</span>
+      </div>
+    </div>
+
+    <!-- SLIDE 3: O MAPA DE AGENTES DE IA -->
+    <div class="slide">
+      <div class="slide-header">
+        <h2 class="slide-title">2. O Mapa de Agentes de IA Propostos</h2>
+        <span class="badge-tag">Solução Agêntica</span>
+      </div>
+      <div class="slide-body">
+        <div class="grid-3">
+          <div class="card">
+            <h3>⭐ Review Intelligence</h3>
+            <p style="margin-bottom: 0.8rem;"><strong>Foco:</strong> CX & NPS</p>
+            <ul>
+              <li>Classifica causa raiz em tempo real</li>
+              <li>Gera resposta empática imediata</li>
+              <li>Alerta SKUs com defeitos recorrentes</li>
+            </ul>
+          </div>
+          <div class="card">
+            <h3>🚚 Logistics Coordinator</h3>
+            <p style="margin-bottom: 0.8rem;"><strong>Foco:</strong> SLA & Operações</p>
+            <ul>
+              <li>Previsão de atrasos em trânsito</li>
+              <li>Notificação preventiva ao cliente</li>
+              <li>Mapeia gargalos em transportadoras</li>
+            </ul>
+          </div>
+          <div class="card">
+            <h3>📈 Seller Success & Growth</h3>
+            <p style="margin-bottom: 0.8rem;"><strong>Foco:</strong> Retenção & GMV</p>
+            <ul>
+              <li>Mentoria automatizada em 3 passos</li>
+              <li>Descentraliza oferta (hoje 60% SP)</li>
+              <li>Reativa clientes hibernantes</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+      <div class="slide-footer">
+        <span>Automação ponta a ponta com LLMs e Prompts Estruturados</span>
+        <span>Página 3</span>
+      </div>
+    </div>
+
+    <!-- SLIDE 4: ARQUITETURA CONCEITUAL INICIAL -->
+    <div class="slide">
+      <div class="slide-header">
+        <h2 class="slide-title">3. Arquitetura Conceitual Inicial</h2>
+        <span class="badge-tag">Orquestração & Fluxo</span>
+      </div>
+      <div class="slide-body">
+        <div class="grid-2">
+          <div class="card">
+            <h3>🔄 Ingestão & Orquestração</h3>
+            <ul>
+              <li><strong>Fonte:</strong> Base Unificada (pedidos, reviews, RFM)</li>
+              <li><strong>Roteador de Eventos:</strong> Dispara agentes por novos reviews ou atrasos detectados</li>
+              <li><strong>Comunicação Agente-Agente:</strong> Agente Logístico notifica o Agente de CX proativamente</li>
+            </ul>
+          </div>
+          <div class="card">
+            <h3>🎯 Destinatários & Ações</h3>
+            <ul>
+              <li><strong>Sistema CRM:</strong> Notificações preventivas e respostas de atendimento</li>
+              <li><strong>Portal do Seller:</strong> Alertas de qualidade de produto e plano de crescimento</li>
+              <li><strong>Painel Operacional:</strong> Mapeamento de gargalos de rotas e rotatividade</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+      <div class="slide-footer">
+        <span>Conexão perfeita entre Dados -> Inteligência -> Ação de Negócio</span>
+        <span>Página 4</span>
+      </div>
+    </div>
+
+    <!-- SLIDE 5: IMPACTO DE NEGÓCIO & PRÓXIMOS PASSOS -->
+    <div class="slide">
+      <div class="slide-header">
+        <h2 class="slide-title">4. Retorno Esperado & Próximos Passos</h2>
+        <span class="badge-tag">ROI & Roadmap</span>
+      </div>
+      <div class="slide-body">
+        <div class="grid-2">
+          <div class="card">
+            <h3>💎 Retorno de Negócio (ROI)</h3>
+            <ul>
+              <li><strong>Proteção da Marca:</strong> Contenção imediata da detração em avaliações 1 estrela</li>
+              <li><strong>Aumento de Receita:</strong> Reativação da base de R$ 4.5M em clientes hibernantes</li>
+              <li><strong>Escala Eficiente:</strong> Suporte inteligente sem inchar equipe humana</li>
+            </ul>
+          </div>
+          <div class="card">
+            <h3>🚀 Roadmap para a Fase 2</h3>
+            <ul>
+              <li><strong>Instanciação:</strong> Conectar prompts com LLMs via LangChain/LangGraph</li>
+              <li><strong>Pipelines:</strong> Conectores de dados em tempo real</li>
+              <li><strong>Benchmark:</strong> Avaliação qualitativa de assertividade das respostas</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+      <div class="slide-footer">
+        <span>Olist Intelligent Marketplace — Transformando Dados em Decisões Agênticas</span>
+        <span>Página 5</span>
+      </div>
+    </div>
+
+  </div>
+
+  <div class="slide-counter">Slide <span id="current-slide">1</span> de <span id="total-slides">5</span></div>
+
+  <div class="controls">
+    <button class="btn" id="prevBtn">❮ Anterior</button>
+    <button class="btn" id="nextBtn">Próximo ❯</button>
+  </div>
+
+  <script>
+    const slides = document.querySelectorAll('.slide');
+    let currentSlide = 0;
+    const totalSlides = slides.length;
+
+    document.getElementById('total-slides').textContent = totalSlides;
+
+    function showSlide(index) {
+      slides.forEach((slide, i) => {
+        slide.classList.remove('active');
+        if (i === index) {
+          slide.classList.add('active');
+        }
+      });
+      document.getElementById('current-slide').textContent = index + 1;
+    }
+
+    document.getElementById('nextBtn').addEventListener('click', () => {
+      currentSlide = (currentSlide + 1) % totalSlides;
+      showSlide(currentSlide);
+    });
+
+    document.getElementById('prevBtn').addEventListener('click', () => {
+      currentSlide = (currentSlide - 1 + totalSlides) % totalSlides;
+      showSlide(currentSlide);
+    });
+
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'ArrowRight' || e.key === ' ') {
+        currentSlide = (currentSlide + 1) % totalSlides;
+        showSlide(currentSlide);
+      } else if (e.key === 'ArrowLeft') {
+        currentSlide = (currentSlide - 1 + totalSlides) % totalSlides;
+        showSlide(currentSlide);
+      }
+    });
+  </script>
+</body>
+</html>
