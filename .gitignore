@@ -1,0 +1,35 @@
+# Conteúdo e apostilas teóricas das aulas FIAP
+Fase 2 Capitulo 1 - Design e Arquitetura de Agentes Inteligentes/
+Fase 2 Capitulo 2 - Estruturação de Casos de Uso/
+Fase 2 Capitulo 3 - Storyboard como o Agente de IA vai atuar/
+Fase 2 Capitulo 4 - Mapeamento de Oportunidades com IA/
+POSTECH*.pdf
+**/POSTECH*.pdf
+**/Entrega Fase 1/
+Tech Challenge/
+
+# Ambientes virtuais e Python
+__pycache__/
+*.py[cod]
+*$py.class
+venv/
+.venv/
+env/
+
+# IDE e ferramentas
+.vscode/
+.idea/
+.agents/
+.gemini/
+
+# Sistema Operacional
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Relatorios intermediarios (subir apenas versao .pdf)
+*.odt
+**/relatorio_executivo_fase2.md
+
+# Scripts utilitarios locais de geracao da Fase 2
+Tech Challenge Fase 2/*.py

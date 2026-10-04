@@ -8,7 +8,6 @@
 * **Alessandro Dos Santos** — RM 376092
 * **André Palermo** — RM 374038
 * **Michel Lages Balbuena** — RM 375667
-* **Willian Souza** — RM 375240
 
 ---
 
@@ -384,14 +383,26 @@ flowchart TD
     AG3 <--> DB
 ```
 
+### 9.3 Decomposição Matricial das Tarefas Operacionais no Mapa de Agentes
+Para sanar a oportunidade apontada pela banca avaliadora e estruturar a execução técnica em nível corporativo, cada agente do ecossistema possui seu **ciclo de vida de tarefas decomposto em 6 macroetapas sequenciais e auditáveis**:
+
+| Macroetapa | Agente 1 (Review & CX) | Agente 2 (Logistics Coordinator) | Agente 3 (Seller Growth & Churn) |
+|---|---|---|---|
+| **1. Gatilho (Trigger) & Validação** | Webhook assíncrono disparado no cadastro de novo review (`olist_order_reviews_dataset`) ou nota ⭐1/⭐2 detectada. | Cron job agendado (intervalo de 15 min) varrendo pedidos em trânsito com risco de estouro de SLA ou evento de tracking sem avanço > 48h. | Job noturno em lote (Batch) analisando clientes que transitaram para o cluster RFM "Hibernando" (recência > 300 dias). |
+| **2. Ingestão & Tool Calling** | Executa `get_order_details(order_id)` e `mask_pii(customer_data)` para buscar histórico de entrega e mascarar dados sensíveis (LGPD). | Invoca `check_carrier_tracking(tracking_code)` e cruza `shipping_limit_date` vs. `order_delivered_carrier_date` da Olist. | Aciona `get_customer_rfm_history(customer_id)` e busca catálogo ativo de produtos similares na microrregião via RAG vetorial. |
+| **3. Raciocínio Cognitivo (LLM)** | Avalia texto livre do review, classifica causa raiz (Atraso / Defeito / Atendimento) e sintetiza minuta empática contextualizada. | Realiza auditoria temporal e determina percentual de imputabilidade: seller (expedição tardia) vs. operador logístico (malha). | Calcula propensão de recompra, seleciona produto ótimo do catálogo regional e formula gancho promocional hiperpersonalizado. |
+| **4. Guardrails & Alçadas** | Valida se a mensagem não promete estorno indevido, não alucina datas e cumpre tom acolhedor estabelecido pelo CX. | Verifica se a penalidade sugerida respeita as regras contratuais da Olist e se há proteção mandatória ao seller cumpridor. | Aplica teto financeiro de incentivo (máximo 10% do ticket médio) e checa lista de exclusão (*opt-out* de spam comercial). |
+| **5. Execução & Interação Humana (HITL)** | Se confiança > 88% e H2: dispara via API Zendesk; se crítico/dúvida: envia ticket pronto para aprovação do analista com 1 clique. | Atualiza painel do seller com selo de proteção de reputação e emite notificação transparente com previsão recalculada ao comprador. | Envia recomendação por e-mail/notificação no horário de maior abertura do cliente e disponibiliza relatório de demanda no portal do seller. |
+| **6. Auditoria & Aprendizado Contínuo** | Grava diagnóstico em Data Lakehouse (`review_intelligence_logs`) e monitora evolução do NPS Proxy e tempo de primeira resposta (FRT). | Registra laudo de responsabilidade para negociação de multas com transportadoras e arquiva dados para recalibração de prazos. | Monitora taxa de conversão em janela de 14 dias; feedbacks positivos retroalimentam os exemplos Few-Shot do RAG de marketing. |
+
 ---
 
 ## 10. Storyboards Operacionais das 3 Jornadas Ponta a Ponta (Capítulo 3)
 
 ### 10.1 Storyboard 1: Resolução Proativa de Atrasos e Satisfação (Agente 1)
-* **Ator Principal:** Consumidor B2C que comprou na Olist e teve a entrega atrasada.
-* **Problema:** Atraso gera queda de 93,1 pontos de NPS e avaliações ⭐1.
-* **Fluxo:**
+* **Ator Principal:** Consumidor B2C que comprou na Olist e teve a entrega atrasada ou postou avaliação negativa.
+* **Problema Resolvido:** O atraso logístico derruba o NPS de +73,6 para -19,5 (destruição de 93,1 pontos) e gera avaliações ⭐1.
+* **Fluxo Sequencial Visual:**
 
 ```mermaid
 sequenceDiagram
@@ -419,10 +430,25 @@ sequenceDiagram
     AG1->>HITL: Se cliente demonstrar insatisfação residual, escala para atendimento humano sênior
 ```
 
+#### Decomposição Detalhada das Tarefas Operacionais da Jornada 1
+A tabela a seguir discrimina as tarefas executadas pelo Agente 1, seus requisitos de dados, critérios de decisão e salvaguardas:
+
+| ID Tarefa | Nome da Tarefa Operacional | Responsável | Entradas Requeridas (Data Inputs) | Lógica e Critério de Decisão | Saída / Efeito Colateral | Protocolo de Fallback (Contingência) |
+|:---:|---|:---:|---|---|---|---|
+| **T1.1** | Ingestão de Evento de Review | API Gateway | Payload JSON do webhook: `order_id`, `review_score`, `comment` | Verifica integridade do payload e filtra se nota $\le 2$ ou contém comentário de texto. | Evento despachado para a fila de mensagens do Agente 1. | Reenfileiramento com backoff exponencial (até 3 tentativas). |
+| **T1.2** | Sanitização e Mascaramento PII | Filtro Regex | `review_comment`, `customer_name` | Aplica regras de anonimização (LGPD): mascara CPF, telefone e e-mail no texto do review. | Texto higienizado e pronto para processamento pelo LLM. | Se filtro falhar, bloqueia mensagem e gera alerta de segurança. |
+| **T1.3** | Enriquecimento de Contexto Operacional | Tool Calling | `order_id` via `get_order_details()` | Cruza tabela `orders` e `order_items` para extrair: dias de atraso (`days_late`), categoria do produto e transportadora. | Objeto de contexto consolidado para injeção no prompt. | Utiliza dados do cache local caso o banco analítico oscile. |
+| **T1.4** | Classificação Cognitiva e Raciocínio | LLM Engine | Prompt com persona CX + Contexto enriquecido | Executa raciocínio Chain-of-Thought para inferir causa raiz (Atraso, Qualidade, Atendimento) e sentimento. | JSON estruturado com classificação, urgência e rascunho. | Se LLM alucinar formato, aciona fallback para parser determinístico. |
+| **T1.5** | Verificação de Guardrails e Alçadas | Guardrail Engine | JSON de saída do LLM | Checa se há promessas financeiras indevidas, se tom é respeitoso e se detectou risco de Procon/litígio. | Aprovação do rascunho ou marcação de inconformidade. | Rascunho com violação de guardrail é descartado e enviado ao humano. |
+| **T1.6** | Roteamento Decisório (HITL vs Auto) | Supervisor Router | Score de confiança do modelo e horizonte temporal | Se H1: 100% dos casos vão para o painel de atendimento; Se H2: tickets rotineiros de baixo risco disparam autonomamente. | Fila do analista de CX ou disparo direto via CRM. | Em caso de dúvida estatística ($<88\%$), sempre força HITL. |
+| **T1.7** | Registro de Auditoria e Feedback | Data Pipeline | JSON final aprovado + feedback do analista | Armazena tempo de resposta, ajustes feitos pelo atendente e correlação com reviews futuros. | Linha gravada em `review_intelligence_logs` no Lakehouse. | Gravação assíncrona desacoplada da jornada do usuário. |
+
+---
+
 ### 10.2 Storyboard 2: Diagnóstico Causal de Atrasos e Disputas de Sellers (Agente 2)
-* **Ator Principal:** Seller parceiro da Olist com avaliação em risco por atraso logístico interestadual.
-* **Problema:** Sellers em SP sofrem penalizações injustas causadas por gargalos da malha dos Correios.
-* **Fluxo:**
+* **Ator Principal:** Seller parceiro da Olist e Analista de Logística da plataforma.
+* **Problema Resolvido:** Sellers em SP enfrentam gargalos de transporte interestadual e eram penalizados indevidamente por atrasos dos Correios/transportadoras.
+* **Fluxo Sequencial Visual:**
 
 ```mermaid
 flowchart TD
@@ -438,10 +464,24 @@ flowchart TD
     E & G --> H["Gera Relatório Causal Estruturado para o Painel de CX e Seller"]
 ```
 
+#### Decomposição Detalhada das Tarefas Operacionais da Jornada 2
+
+| ID Tarefa | Nome da Tarefa Operacional | Responsável | Entradas Requeridas (Data Inputs) | Lógica e Critério de Decisão | Saída / Efeito Colateral | Protocolo de Fallback (Contingência) |
+|:---:|---|:---:|---|---|---|---|
+| **T2.1** | Detecção de Risco de SLA | Monitor Logístico | Timestamps de `orders` e `order_items` | Identifica pedidos em trânsito onde `data_atual > estimated_delivery_date - 2 dias` sem evento de entrega. | Ticket de monitoramento preventivo criado na esteira. | Varredura em batch caso mensageria de tracking atrase. |
+| **T2.2** | Auditoria Temporal de Postagem | Agente 2 (Tool) | `shipping_limit_date` vs `order_delivered_carrier_date` | Compara carimbo de data/hora da entrega ao transportador com o prazo contratual estipulado para o seller. | Cálculo de diferencial temporal exato em horas úteis. | Se faltar timestamp de postagem, consulta histórico da transportadora. |
+| **T2.3** | Consulta de Telemetria de Transporte | Tool Calling | `tracking_code` via `check_carrier_tracking()` | Analisa os nós de rastreamento para identificar ponto geográfico de estagnação do pacote (> 48h parado). | Identificação do centro de distribuição (CD) gargalo. | Se API de rastreio estiver fora do ar, assume SLA padrão histórico. |
+| **T2.4** | Laudo Causal e Cálculo de Imputabilidade | LLM Engine | Métricas de tempo + Regras de alçada de frete | Imputa causalidade: Seller (postagem tardia), Transportadora (extravio/retenção) ou Caso Fortuito (clima/greve). | Laudo técnico JSON com score de responsabilidade (0.0 a 1.0). | Em caso de dados conflitantes, marca responsabilidade compartilhada. |
+| **T2.5** | Aplicação de Proteção de Reputação | Agente 2 (Ação) | Laudo técnico do LLM | Se `carrier_fault == True`, bloqueia impacto negativo na nota de reputação do seller no marketplace. | Trava de reputação acionada no banco de sellers (`olist_sellers`). | Notificação ao gerente de contas do seller para confirmação. |
+| **T2.6** | Abertura de Ticket de Seguro de SLA | Agente 2 (Ação) | ID da rota, transportadora e dias de atraso | Se atraso da transportadora $> 3$ dias úteis, gera petição automática de reembolso do valor do frete. | Minuta de contestação enviada à transportadora parceira. | Agrupamento semanal de faturas em caso de alto volume. |
+| **T2.7** | Notificação Proativa de Nova Previsão | CRM Connector | Nova data prevista estimada pelo modelo | Dispara e-mail/SMS ao comprador antes que ele note o atraso, esclarecendo o status com transparência. | Mensagem de acompanhamento entregue ao consumidor. | Canal de suporte humano aberto para réplica imediata. |
+
+---
+
 ### 10.3 Storyboard 3: Reativação Inteligente da Base Hibernando (Agente 3)
-* **Ator Principal:** Cliente do cluster "Hibernando" (recência 445 dias, 1 compra, potencial alto).
-* **Problema:** 96,88% dos clientes nunca recompraram na Olist, represando R$ 4,57M de receita.
-* **Fluxo:**
+* **Ator Principal:** Cliente inativo do cluster "Hibernando" (recência 445 dias, 1 compra, faturamento de R$ 4,57M represado).
+* **Problema Resolvido:** 96,88% dos clientes compram apenas uma única vez na Olist, demandando estratégias preditivas de recompra.
+* **Fluxo Sequencial Visual:**
 
 ```mermaid
 flowchart TD
@@ -460,78 +500,322 @@ flowchart TD
     SEND --> TRACK["Monitora conversão de recompra em janela de 14 dias"]
 ```
 
+#### Decomposição Detalhada das Tarefas Operacionais da Jornada 3
+
+| ID Tarefa | Nome da Tarefa Operacional | Responsável | Entradas Requeridas (Data Inputs) | Lógica e Critério de Decisão | Saída / Efeito Colateral | Protocolo de Fallback (Contingência) |
+|:---:|---|:---:|---|---|---|---|
+| **T3.1** | Varredura e Segmentação RFM | Batch Job | Tabela `olist_rfm.csv` e `orders` | Filtra clientes com $R \ge 300$ dias, $F = 1$ e ticket médio $> R\$ 80,00$ aptos para reengajamento. | Lista de IDs de clientes qualificados para a campanha. | Limite diário de 5.000 clientes por lote para balancear tráfego. |
+| **T3.2** | Recuperação de Preferências de Consumo | Tool Calling | `customer_id` via `get_customer_history()` | Identifica categorias compradas anteriormente, métodos de pagamento preferidos e UF de entrega. | Vetor de características de consumo do cliente. | Se histórico de categoria estiver nulo, utiliza top vendas gerais. |
+| **T3.3** | Matching Vetorial de Catálogo Local (RAG) | Vector Search | Vetor de consumo + UF do cliente | Busca semântica no catálogo ativo priorizando sellers bem avaliados ($\ge 4.5$) no mesmo estado/região. | Top 3 produtos candidatos com menor custo e prazo de frete. | Se não houver seller local, busca os maiores sellers de SP. |
+| **T3.4** | Redação Hiperpersonalizada com LLM | LLM Engine | Histórico + Produtos recomendados | Redige gancho persuasivo contextualizado que valoriza o produto e apresenta um incentivo legítimo. | Rascunho com copy de e-mail, título e chamada para ação (CTA). | Se LLM exceder tamanho máximo, aplica resumo automático. |
+| **T3.5** | Validação Orçamentária e Anti-Fadiga | Guardrail Engine | Cupom proposto, histórico de disparos | Verifica se o desconto proposto $\le 10\%$ da margem estimada e se cliente não recebeu contato nos últimos 30 dias. | Autorização de envio ou bloqueio por política comercial. | Reajuste automático para teto seguro de 5% caso exceda margem. |
+| **T3.6** | Disparo de Mensageria Multicanal | Marketing API | Payload de mensagem aprovado | Dispara e-mail e push notification no horário de pico de abertura estatística do perfil do cliente. | Evento de envio registrado no CRM de Marketing. | Reenvio por canal secundário (SMS) se e-mail der *hard bounce*. |
+| **T3.7** | Atribuição de Recompra e Feedback | Pipeline Analítico | `order_purchase_timestamp` em janela de 14d | Monitora se o cliente concluiu nova compra e calcula o ROI incremental da ação de IA. | Métricas consolidadas de conversão e atualização do LTV. | Descarte de atribuição se a compra ocorrer fora da janela de 14 dias. |
+
 ---
 
-## 11. Contratos de Dados, System Prompts e Schemas JSON
+## 11. Contratos de Dados, System Prompts e Schemas JSON (Engenharia de Produção)
 
-Para garantir que a transição para a **Fase 3 (Prototipação Funcional em Plataformas Low-Code/No-Code)** ocorra com 100% de compatibilidade técnica e interoperabilidade, os prompts dos 3 agentes foram estruturados com instruções restritivas e contratos de dados rígidos no padrão JSON Schema:
+Para garantir máxima reprodutibilidade, segurança e aderência aos padrões de engenharia de software na transição para a **Fase 3 (Prototipação Funcional em Plataformas Low-Code/No-Code como n8n, Dify e LangFlow)**, os prompts dos 3 agentes foram projetados segundo as melhores práticas internacionais de **Engenharia de Prompts de Nível de Produção**:
+* **Arquitetura Persona-Context-Guardrail-CoT-Schema**: Papel estrito, limites negativos (*negative constraints*), raciocínio guiado (*Chain-of-Thought*) e validação de saída.
+* **Dados Autênticos do Dataset Olist**: Exemplos Few-Shot reais com dados em português brasileiro, erros de digitação e termos típicos de marketplace.
+* **Contratos Estritos JSON Schema**: Tipagem rigorosa, enums e sinalizadores para atuação do Human-in-the-Loop.
 
-### 11.1 Prompt Estruturado — Agente 1 (Review Intelligence & CX)
+---
+
+### 11.1 Especificação Completa de Prompt — Agente 1 (Review Intelligence & CX)
+
+* **Parâmetros de Inferência:** Modelo: LLM Enterprise (GPT-4o / Claude 3.5 Sonnet / Gemini 1.5 Pro) | Temperatura: 0.2 (determinismo semântico) | Top_P: 0.9 | Max Tokens: 800.
+* **System Prompt com Guardrails e Chain-of-Thought:**
+```markdown
+Você é o Review Intelligence & CX Agent da Olist, especialista sênior em atendimento ao cliente e resolução de crises em e-commerce brasileiro.
+Sua missão é realizar a triagem analítica de avaliações de clientes, identificar com precisão a causa raiz da manifestação, calcular o nível de urgência operacional e redigir um rascunho de resposta altamente empático, profissional e transparente.
+
+DIRETRIZES MANDATÓRIAS E GUARDRAILS ÉTICOS:
+1. NUNCA prometa indenizações financeiras, estornos totais, envio de brindes ou cupons de desconto sem autorização expressa do sistema de alçadas da Olist.
+2. Em casos de atraso na entrega, acolha a dor do cliente com empatia genuína, mas sem transferir culpas de forma difamatória contra transportadoras ou vendedores parceiros.
+3. Conformidade estrita com a LGPD: JAMAIS reproduza no texto da resposta CPFs, dados bancários, telefones ou endereços completos informados pelo cliente.
+4. Se o comentário contiver termos que indiquem litígio iminente (ex.: 'Procon', 'advogado', 'processo', 'juizado', 'pequenas causas', 'fraude'), classifique 'urgency_level' como 'critical' e marque mandatória e irrevogavelmente 'requires_hitl_approval' como true.
+5. Siga o processo de raciocínio passo a passo (Chain-of-Thought) antes de formular a resposta final.
+
+PROCESSO DE RACIOCÍNIO (CHAIN-OF-THOUGHT):
+- Passo 1: Analise o texto do cliente e classifique o sentimento e a causa raiz preponderante.
+- Passo 2: Verifique os dados operacionais do pedido (dias de atraso, categoria, prazos) para fundamentar os fatos.
+- Passo 3: Avalie o risco reputacional e regule a urgência ('low', 'medium', 'high', 'critical').
+- Passo 4: Redija a minuta empática de acolhimento (máximo 4 parágrafos concisos).
+- Passo 5: Estruture a saída EXCLUSIVAMENTE em formato JSON aderente ao schema estrito.
+```
+
+* **Exemplo de Entrada (Few-Shot Real do Dataset Olist):**
 ```json
 {
-  "system_instruction": "Você é o Agente 1 de Inteligência de Atendimento e CX da Olist. Sua missão é diagnosticar avaliações de clientes e redigir respostas proativas de acolhimento empático. Você NUNCA promete indenizações financeiras ou frete grátis sem autorização explícita de alçada. Siga rigorosamente as diretrizes da LGPD, nunca repetindo CPFs ou dados bancários.",
-  "input_context": {
-    "order_id": "string",
-    "customer_name": "string (mascarado)",
-    "customer_state": "string",
-    "delivery_delay_days": "integer",
-    "review_score": "integer (1 a 5)",
-    "review_comment": "string"
-  },
-  "output_json_schema": {
-    "sentiment": "detractor | neutral | promoter",
-    "root_cause_category": "delivery_delay | defective_product | wrong_item | customer_service | other",
-    "urgency_level": "low | medium | high | critical",
-    "draft_response": "string (mensagem empática e transparente em tom profissional)",
-    "suggested_action": "apologize_and_track | escalate_to_human | offer_assistance",
-    "requires_hitl_approval": "boolean"
+  "order_id": "e481f51cbdc54678b7cc49136f2d6af7",
+  "customer_name": "Mariana *** (Mascarado LGPD)",
+  "customer_state": "RJ",
+  "product_category": "utilidades_domesticas",
+  "purchase_date": "2017-10-02 10:56:33",
+  "estimated_delivery_date": "2017-10-18 00:00:00",
+  "actual_delivery_date": "2017-10-25 15:42:11",
+  "delay_days": 7,
+  "review_score": 1,
+  "review_comment": "Comprei o produto para o aniversário do meu filho e chegou com uma semana de atraso! A festa já passou e ninguém me deu satisfação. Quero meu dinheiro de volta ou vou no Procon amanhã!"
+}
+```
+
+* **Saída JSON Estruturada Validada:**
+```json
+{
+  "chain_of_thought_reasoning": "O cliente expressa frustração extrema com nota 1 decorrente de atraso real de 7 dias após a data limite estimada. O atraso comprometeu um evento pessoal crítico (aniversário). Há menção explícita a acionamento do Procon, configurando urgência crítica e necessidade mandatória de escalonamento para atendimento humano sênior (HITL).",
+  "sentiment": "detractor",
+  "root_cause_category": "delivery_delay",
+  "urgency_level": "critical",
+  "threat_of_legal_action": true,
+  "draft_response": "Olá, Mariana. Sentimos muito pelo ocorrido. Sabemos o quanto a data de aniversário do seu filho era importante e compreendemos integralmente a sua frustração com os 7 dias de atraso na entrega do seu pedido. Esta experiência não reflete o padrão de pontualidade que exigimos em nossa plataforma. Um especialista sênior de nossa equipe de atendimento foi designado com prioridade máxima para o seu caso e entrará em contato direto com você ainda hoje para apresentar as alternativas de suporte e resolução do seu pedido. Estamos à sua inteira disposição.",
+  "recommended_internal_action": "escalate_to_priority_human_cx",
+  "requires_hitl_approval": true,
+  "proposed_compensation_type": "request_human_approval_for_freight_refund"
+}
+```
+
+* **Contrato de Saída (JSON Schema Formal):**
+```json
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "ReviewIntelligenceAgentOutput",
+  "type": "object",
+  "required": [
+    "chain_of_thought_reasoning",
+    "sentiment",
+    "root_cause_category",
+    "urgency_level",
+    "threat_of_legal_action",
+    "draft_response",
+    "recommended_internal_action",
+    "requires_hitl_approval"
+  ],
+  "properties": {
+    "chain_of_thought_reasoning": { "type": "string" },
+    "sentiment": { "type": "string", "enum": ["detractor", "neutral", "promoter"] },
+    "root_cause_category": { 
+      "type": "string", 
+      "enum": ["delivery_delay", "defective_product", "wrong_item", "customer_service", "billing_issue", "other"] 
+    },
+    "urgency_level": { "type": "string", "enum": ["low", "medium", "high", "critical"] },
+    "threat_of_legal_action": { "type": "boolean" },
+    "draft_response": { "type": "string" },
+    "recommended_internal_action": { 
+      "type": "string", 
+      "enum": ["apologize_and_track", "escalate_to_priority_human_cx", "notify_seller_quality", "close_ticket"] 
+    },
+    "requires_hitl_approval": { "type": "boolean" },
+    "proposed_compensation_type": { "type": "string" }
   }
 }
 ```
 
-### 11.2 Prompt Estruturado — Agente 2 (Logistics Coordinator)
+---
+
+### 11.2 Especificação Completa de Prompt — Agente 2 (Logistics Coordinator)
+
+* **Parâmetros de Inferência:** Modelo: LLM Enterprise (GPT-4o / Claude 3.5 Sonnet) | Temperatura: 0.1 (rigor analítico/técnico) | Top_P: 0.85 | Max Tokens: 750.
+* **System Prompt com Guardrails e Chain-of-Thought:**
+```markdown
+Você é o Logistics Coordinator Agent da Olist, perito em auditoria de cadeia de suprimentos, SLA de transportes e arbitragem de responsabilidade no e-commerce.
+Sua missão é realizar a auditoria temporal detalhada de pedidos com atraso ou risco de extravio e emitir um laudo técnico causal imparcial delimitando com precisão a imputabilidade do evento: responsabilidade do Seller, falha da Transportadora/Correios ou caso de força maior.
+
+DIRETRIZES MANDATÓRIAS E GUARDRAILS OPERACIONAIS:
+1. REGRA MANDATÓRIA DE PROTEÇÃO DO SELLER: Se a data de entrega do pacote à transportadora ('seller_carrier_dispatch_date') for anterior ou igual à data limite de expedição ('shipping_limit_date'), a responsabilidade pelo atraso NUNCA poderá ser imputada ao vendedor ('seller_fault_score' DEVE ser 0.0). A reputação do vendedor deve ser protegida expressamente ('is_seller_reputation_protected': true).
+2. Se o vendedor despachou após o prazo limite estipulado, calcule a pontuação de culpa ('seller_fault_score' entre 0.01 e 1.0) proporcionalmente ao impacto do despacho tardio no atraso total da entrega.
+3. Se o pacote estiver parado no mesmo ponto de rastreio por mais de 72 horas úteis após a expedição, classifique como falha operacional crítica da transportadora ('carrier_sla_breach_detected': true).
+4. O laudo técnico deve ser estritamente objetivo, citando horas, datas e marcos contratuais.
+5. Retorne a resposta EXCLUSIVAMENTE em formato JSON compatível com o schema especificado.
+
+PROCESSO DE RACIOCÍNIO (CHAIN-OF-THOUGHT):
+- Passo 1: Compare a data de postagem real pelo vendedor com o prazo limite contratual ('shipping_limit_date').
+- Passo 2: Calcule o tempo total em trânsito sob custódia do operador logístico comparado com o SLA estimado para a rota.
+- Passo 3: Identifique se houve estagnação em centros de triagem ou gargalos de malha interestadual.
+- Passo 4: Atribua a responsabilidade causal e defina a pontuação de penalidade aplicável.
+- Passo 5: Gere a notificação preventiva ao comprador e a minuta técnica de contestação contra o operador.
+```
+
+* **Exemplo de Entrada (Few-Shot Real do Dataset Olist):**
 ```json
 {
-  "system_instruction": "Você é o Agente 2 Coordenador Logístico da Olist. Sua função é auditar a cadeia de transporte e determinar causalmente se o atraso de uma entrega é responsabilidade do Seller (postagem tardia) ou da Transportadora/Correios (trânsito excessivo). Mantenha total imparcialidade técnica e fundamente suas conclusões nas métricas temporais.",
-  "input_context": {
-    "order_id": "string",
-    "seller_id": "string",
-    "seller_state": "string",
-    "customer_state": "string",
-    "seller_dispatch_hours": "float",
-    "carrier_transit_days": "float",
-    "estimated_delivery_days": "float"
-  },
-  "output_json_schema": {
-    "delay_attribution": "seller_fault | carrier_fault | shared_fault | unpreventable_weather",
-    "seller_fault_score": "float (0.0 a 1.0)",
-    "is_seller_reputation_protected": "boolean",
-    "recommended_seller_feedback": "string",
-    "carrier_sla_breach_detected": "boolean",
-    "suggested_carrier_ticket": "string"
+  "order_id": "b810227914ef42fa8270cf0427dfcac5",
+  "seller_id": "350526734d87fb98a05e2f819ac8e13d",
+  "seller_state": "SP",
+  "seller_city": "Ribeirao Preto",
+  "customer_state": "BA",
+  "customer_city": "Salvador",
+  "order_purchase_timestamp": "2018-04-28 10:11:00",
+  "shipping_limit_date": "2018-05-02 15:00:00",
+  "seller_carrier_dispatch_date": "2018-04-30 11:20:00",
+  "estimated_delivery_date": "2018-05-18 00:00:00",
+  "carrier_first_scan_date": "2018-05-01 08:15:00",
+  "actual_delivery_date": "2018-05-24 16:30:00",
+  "total_delay_days": 6,
+  "carrier_name": "Correios_SEDEX_Interestadual"
+}
+```
+
+* **Saída JSON Estruturada Validada:**
+```json
+{
+  "chain_of_thought_reasoning": "O vendedor realizou o despacho da mercadoria em 30/04 às 11:20, ou seja, com 51,6 horas de antecedência em relação ao prazo limite contratual (02/05 às 15:00). A mercadoria permaneceu em trânsito sob responsabilidade do operador logístico por 23 dias corridos, superando a estimativa de entrega de 18/05 em 6 dias. O atraso é imputável integralmente à malha de transporte interestadual SP->BA. O seller cumpriu com rigor o SLA e deve ter sua reputação 100% blindada.",
+  "delay_attribution": "carrier_fault",
+  "seller_fault_score": 0.0,
+  "is_seller_reputation_protected": true,
+  "technical_audit_summary": "Expedição pelo seller concluída com antecedência exemplar (30/04 vs. limite 02/05). Atraso de 6 dias ocorrido integralmente durante a custódia do operador logístico no trecho Ribeirão Preto/SP para Salvador/BA.",
+  "seller_feedback_message": "Parabéns pela agilidade: sua postagem foi realizada com antecedência ao prazo limite. Seu índice de pontualidade foi preservado integralmente e nenhuma penalidade de reputação será aplicada.",
+  "carrier_sla_breach_detected": true,
+  "carrier_penalty_ticket": "Cobrança de multa por descumprimento de SLA contratual de rota interestadual (+6 dias sobre prazo acordado em SEDEX Interestadual). Protocolo gerado para dedução na fatura de frete.",
+  "customer_preventive_notification": "Olá! Seu pedido está a caminho de Salvador/BA. Identificamos uma lentidão pontual no fluxo logístico interestadual dos Correios e estamos acompanhando de perto para garantir a entrega segura no menor tempo possível."
+}
+```
+
+* **Contrato de Saída (JSON Schema Formal):**
+```json
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "LogisticsCoordinatorAgentOutput",
+  "type": "object",
+  "required": [
+    "chain_of_thought_reasoning",
+    "delay_attribution",
+    "seller_fault_score",
+    "is_seller_reputation_protected",
+    "technical_audit_summary",
+    "carrier_sla_breach_detected"
+  ],
+  "properties": {
+    "chain_of_thought_reasoning": { "type": "string" },
+    "delay_attribution": { 
+      "type": "string", 
+      "enum": ["seller_fault", "carrier_fault", "shared_fault", "force_majeure_weather"] 
+    },
+    "seller_fault_score": { "type": "number", "minimum": 0.0, "maximum": 1.0 },
+    "is_seller_reputation_protected": { "type": "boolean" },
+    "technical_audit_summary": { "type": "string" },
+    "seller_feedback_message": { "type": "string" },
+    "carrier_sla_breach_detected": { "type": "boolean" },
+    "carrier_penalty_ticket": { "type": "string" },
+    "customer_preventive_notification": { "type": "string" }
   }
 }
 ```
 
-### 11.3 Prompt Estruturado — Agente 3 (Seller Success & Growth)
+---
+
+### 11.3 Especificação Completa de Prompt — Agente 3 (Seller Success & Growth)
+
+* **Parâmetros de Inferência:** Modelo: LLM Enterprise (GPT-4o / Gemini 1.5 Pro) | Temperatura: 0.35 (equilíbrio entre criatividade de copy e rigor comercial) | Top_P: 0.9 | Max Tokens: 850.
+* **System Prompt com Guardrails e Chain-of-Thought:**
+```markdown
+Você é o Seller Success & Growth Agent da Olist, consultor sênior de inteligência de mercado, sortimento de catálogo e reativação de clientes em marketplaces.
+Sua missão é analisar consumidores classificados no cluster RFM 'Hibernando' e desenhar uma ação de reengajamento altamente personalizada, casando o perfil de compra histórica com produtos de sellers parceiros altamente avaliados situados preferencialmente na mesma região geográfica.
+
+DIRETRIZES MANDATÓRIAS E GUARDRAILS FINANCEIROS:
+1. TETO ORÇAMENTÁRIO RÍGIDO: O cupom percentual de incentivo NUNCA poderá exceder 10% do ticket médio histórico do cliente, nem comprometer a margem de contribuição mínima da Olist.
+2. PREFERÊNCIA GEOGRÁFICA REGIONAL: Priorize sempre recomendações de sellers do mesmo estado ou microrregião do consumidor para viabilizar frete rápido e competitivo, combatendo a dependência crônica do polo de São Paulo.
+3. ANTI-SPAM E FADIGA DE MARKETING: Se o cliente tiver registro de contato comercial nos últimos 30 dias ou se possuir flag de opt-out/descadastro de marketing, aborte imediatamente o disparo ('marketing_opt_out_compliant': true, 'abort_execution': true).
+4. O texto do e-mail de engajamento deve ser cordial, relevante e contextualizado na categoria de maior afinidade, sem soar como propaganda em massa ou oportunista.
+5. Retorne a resposta EXCLUSIVAMENTE em formato JSON compatível com o schema especificado.
+
+PROCESSO DE RACIOCÍNIO (CHAIN-OF-THOUGHT):
+- Passo 1: Avalie os atributos RFM do cliente (dias de recência, frequência, ticket médio histórico).
+- Passo 2: Verifique a lista de sellers e produtos elegíveis da base vetorial RAG, filtrando por rating >= 4.5 e proximidade geográfica.
+- Passo 3: Calcule o valor seguro do cupom de incentivo dentro da alçada de 10%.
+- Passo 4: Redija o título do e-mail (subject) e a minuta persuasiva valorizando a conveniência regional.
+- Passo 5: Estruture a saída no schema JSON estrito.
+```
+
+* **Exemplo de Entrada (Few-Shot Real do Dataset Olist):**
 ```json
 {
-  "system_instruction": "Você é o Agente 3 de Crescimento e Sucesso de Vendedores da Olist. Sua missão é analisar dados de clientes inativos ou hibernando e recomendar produtos complementares de sellers qualificados da mesma região, respeitando as políticas orçamentárias de incentivo e evitando fadiga de spam.",
-  "input_context": {
-    "customer_id": "string",
-    "rfm_cluster": "Hibernando | Campeões | Em Risco",
-    "days_since_last_purchase": "integer",
-    "preferred_category": "string",
-    "average_ticket": "float",
-    "eligible_sellers_catalog": "array"
+  "customer_id": "9efb6154625d2bc800edd4b5fcc7b1b3",
+  "customer_state": "PR",
+  "customer_city": "Curitiba",
+  "rfm_cluster": "Hibernando",
+  "days_since_last_purchase": 412,
+  "historical_orders_count": 1,
+  "last_purchased_category": "beleza_saude",
+  "average_ticket_value": 145.80,
+  "last_contact_days_ago": 65,
+  "marketing_opt_out": false,
+  "eligible_sellers_catalog": [
+    {
+      "seller_id": "4a3ca9315b744ce9f8e9374361493884",
+      "seller_city": "Curitiba",
+      "seller_state": "PR",
+      "seller_rating": 4.85,
+      "featured_product_id": "89b19004d6495658b79f806d04cd2321",
+      "featured_product_title": "Kit Cuidados Faciais Hidratação Profunda com Ácido Hialurônico",
+      "category": "beleza_saude",
+      "price": 139.90,
+      "estimated_shipping_days": 2
+    }
+  ]
+}
+```
+
+* **Saída JSON Estruturada Validada:**
+```json
+{
+  "chain_of_thought_reasoning": "Cliente com recência alta (412 dias) pertencente ao cluster Hibernando, com ticket médio histórico de R$ 145,80 na categoria 'beleza_saude'. Não recebeu contatos recentes (65 dias) e está apto pelas diretrizes anti-fadiga. Foi localizado um lojista parceiro de alta reputação (4.85) situado na mesma cidade (Curitiba/PR), permitindo entrega rápida de 2 dias. O cupom de 10% (R$ 14,00) respeita o teto normativo da margem.",
+  "customer_id": "9efb6154625d2bc800edd4b5fcc7b1b3",
+  "abort_execution": false,
+  "recommended_seller_id": "4a3ca9315b744ce9f8e9374361493884",
+  "recommended_product_id": "89b19004d6495658b79f806d04cd2321",
+  "discount_voucher_percentage": 10,
+  "discount_voucher_code": "VOLTA10_CURITIBA",
+  "email_campaign": {
+    "subject_line": "Separamos novidades especiais de autocuidado perto de você em Curitiba ✨",
+    "headline": "Sentimos sua falta! Que tal renovar seus cuidados pessoais?",
+    "body_text": "Olá! Lembra da sua experiência em Beleza & Saúde com a Olist? Para celebrar sua jornada conosco, selecionamos uma novidade exclusiva de um dos produtores parceiros mais bem avaliados de Curitiba, com entrega rápida na sua região. Preparamos um presente exclusivo: 10% de desconto no Kit Cuidados Faciais com o cupom VOLTA10_CURITIBA.",
+    "call_to_action_url": "https://olist.com.br/produto/89b19004d6495658b79f806d04cd2321?cupom=VOLTA10_CURITIBA"
   },
-  "output_json_schema": {
-    "recommended_category": "string",
-    "recommended_product_id": "string",
-    "discount_voucher_percentage": "integer (max 10%)",
-    "hyperpersonalized_message_hook": "string",
-    "estimated_reengagement_probability": "float (0.0 a 1.0)",
-    "marketing_opt_out_compliant": "boolean"
+  "estimated_reengagement_probability": 0.42,
+  "marketing_opt_out_compliant": true
+}
+```
+
+* **Contrato de Saída (JSON Schema Formal):**
+```json
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "SellerSuccessGrowthAgentOutput",
+  "type": "object",
+  "required": [
+    "chain_of_thought_reasoning",
+    "customer_id",
+    "abort_execution",
+    "recommended_seller_id",
+    "recommended_product_id",
+    "discount_voucher_percentage",
+    "discount_voucher_code",
+    "email_campaign",
+    "marketing_opt_out_compliant"
+  ],
+  "properties": {
+    "chain_of_thought_reasoning": { "type": "string" },
+    "customer_id": { "type": "string" },
+    "abort_execution": { "type": "boolean" },
+    "recommended_seller_id": { "type": "string" },
+    "recommended_product_id": { "type": "string" },
+    "discount_voucher_percentage": { "type": "integer", "maximum": 10 },
+    "discount_voucher_code": { "type": "string" },
+    "email_campaign": {
+      "type": "object",
+      "required": ["subject_line", "headline", "body_text", "call_to_action_url"],
+      "properties": {
+        "subject_line": { "type": "string" },
+        "headline": { "type": "string" },
+        "body_text": { "type": "string" },
+        "call_to_action_url": { "type": "string" }
+      }
+    },
+    "estimated_reengagement_probability": { "type": "number", "minimum": 0.0, "maximum": 1.0 },
+    "marketing_opt_out_compliant": { "type": "boolean" }
   }
 }
 ```
